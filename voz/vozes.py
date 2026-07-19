@@ -28,6 +28,15 @@ CONFIG_PATH = BASE / "config.json"
 
 ELEVEN_URL = "https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream"
 
+# O código HTTP diz o que aconteceu; a mensagem precisa dizer o que fazer.
+MOTIVOS = {
+    401: "chave da ElevenLabs inválida",
+    403: "chave sem permissão para esta voz",
+    404: "voice_id não encontrado",
+    422: "texto recusado pela ElevenLabs",
+    429: "cota da ElevenLabs esgotada",
+}
+
 
 def config() -> dict:
     return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
@@ -87,16 +96,30 @@ class VozElevenLabs:
 
     nome = "ElevenLabs"
 
+    # Falhas seguidas antes de desistir de vez da nuvem. Uma oscilação de rede
+    # não deveria custar a voz boa pelo resto da conversa; cota esgotada, sim.
+    LIMITE_FALHAS = 3
+
     def __init__(self, chave: str, cfg: dict) -> None:
         self.chave = chave
         self.cfg = cfg
         self.cli = httpx.Client(timeout=60)
         self.fila: Queue[str | None] = Queue()
         self.tocador = _powershell(BASE / "tocar.ps1")
+        self.reserva: VozWindows | None = None
+        self.falhas = 0
+        self.desistiu = False
         self.thread = threading.Thread(target=self._trabalhar, daemon=True)
         self.thread.start()
 
-    def _sintetizar(self, texto: str) -> bytes | None:
+    def _maria(self) -> "VozWindows":
+        """Voz do Windows, criada só quando precisa."""
+        if self.reserva is None:
+            self.reserva = VozWindows()
+        return self.reserva
+
+    def _sintetizar(self, texto: str) -> tuple[bytes | None, str]:
+        """Devolve o áudio e, em caso de falha, o motivo em português."""
         try:
             r = self.cli.post(
                 ELEVEN_URL.format(voice_id=self.cfg["voice_id"]),
@@ -113,9 +136,11 @@ class VozElevenLabs:
                 },
             )
             r.raise_for_status()
-            return r.content
+            return r.content, ""
+        except httpx.HTTPStatusError as erro:
+            return None, MOTIVOS.get(erro.response.status_code, f"erro {erro.response.status_code}")
         except httpx.HTTPError:
-            return None
+            return None, "sem resposta da ElevenLabs"
 
     def _trabalhar(self) -> None:
         while True:
@@ -123,9 +148,29 @@ class VozElevenLabs:
             if texto is None:
                 break
 
-            audio = self._sintetizar(texto)
+            # Já desistiu da nuvem: tudo sai pela Maria.
+            if self.desistiu:
+                self._maria().falar(texto)
+                continue
+
+            audio, motivo = self._sintetizar(texto)
+
             if audio is None:
-                continue  # falha de rede não interrompe a conversa
+                self.falhas += 1
+                self._maria().falar(texto)  # a frase não se perde
+
+                if self.falhas >= self.LIMITE_FALHAS:
+                    self.desistiu = True
+                    print(
+                        f"\n  [voz: {motivo} — passando para a Maria pelo resto "
+                        f"da conversa]\n",
+                        flush=True,
+                    )
+                elif self.falhas == 1:
+                    print(f"\n  [voz: {motivo} — esta frase saiu pela Maria]\n", flush=True)
+                continue
+
+            self.falhas = 0  # voltou a funcionar
 
             fd, caminho = tempfile.mkstemp(suffix=".mp3", prefix="jarvis_")
             with os.fdopen(fd, "wb") as f:
@@ -147,6 +192,8 @@ class VozElevenLabs:
         self.fila.put(None)
         self.thread.join(timeout=30)
         _encerrar(self.tocador)
+        if self.reserva is not None:
+            self.reserva.encerrar()
         self.cli.close()
 
 
