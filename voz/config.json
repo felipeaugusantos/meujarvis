@@ -1,0 +1,14 @@
+{
+  "backend": "auto",
+  "elevenlabs": {
+    "voice_id": "4O1sYUnmtThcBoSBrri7",
+    "modelo": "eleven_turbo_v2_5",
+    "estabilidade": 0.45,
+    "similaridade": 0.8,
+    "velocidade": 1.0
+  },
+  "windows": {
+    "voz": "Microsoft Maria Desktop",
+    "velocidade": 1
+  }
+}

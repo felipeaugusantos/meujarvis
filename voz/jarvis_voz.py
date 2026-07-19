@@ -11,14 +11,14 @@ antes de terminar de pensar, em vez de deixar um silêncio longo.
 
 from __future__ import annotations
 
-import base64
 import json
 import re
-import subprocess
 import sys
 from pathlib import Path
 
 import httpx
+
+from vozes import escolher
 
 BASE = Path(__file__).parent
 SCRIPT_FALA = BASE / "falar.ps1"
@@ -37,52 +37,6 @@ PERSONA = (
 
 # Fim de frase: pontuação seguida de espaço. Evita quebrar em "3.5" ou "Dr. Silva".
 FIM_DE_FRASE = re.compile(r"(?<=[.!?…])\s+")
-
-
-class Voz:
-    """Canal de fala — mantém um PowerShell vivo esperando frases."""
-
-    def __init__(self) -> None:
-        self.proc = subprocess.Popen(
-            [
-                "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
-                "-File", str(SCRIPT_FALA),
-            ],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            text=True,
-            encoding="utf-8",
-        )
-
-    def falar(self, texto: str) -> None:
-        texto = limpar(texto)
-        if not texto or self.proc.stdin is None:
-            return
-        codificado = base64.b64encode(texto.encode("utf-8")).decode("ascii")
-        try:
-            self.proc.stdin.write(codificado + "\n")
-            self.proc.stdin.flush()
-        except (BrokenPipeError, OSError):
-            pass  # voz morreu; a conversa por texto continua
-
-    def encerrar(self) -> None:
-        try:
-            if self.proc.stdin:
-                self.proc.stdin.write("__SAIR__\n")
-                self.proc.stdin.flush()
-            self.proc.wait(timeout=10)
-        except Exception:
-            self.proc.kill()
-
-
-def limpar(texto: str) -> str:
-    """Tira marcação que não faz sentido pronunciar."""
-    texto = re.sub(r"```.*?```", " ", texto, flags=re.DOTALL)  # blocos de código
-    texto = re.sub(r"[*_`#>]", "", texto)                       # markdown solto
-    texto = re.sub(r"\[(.*?)\]\(.*?\)", r"\1", texto)           # links
-    texto = re.sub(r"\s+", " ", texto)
-    return texto.strip()
 
 
 def escolher_servidor(cli: httpx.Client) -> tuple[str, bool]:
@@ -139,11 +93,14 @@ def main() -> int:
     url, via_jarvis = escolher_servidor(cli)
     origem = "servidor do Jarvis" if via_jarvis else "Ollama direto"
 
-    voz = Voz()
+    voz, aviso = escolher()
     historico = [{"role": "system", "content": PERSONA}]
 
     print("\n  JARVIS — modo de voz")
     print(f"  Modelo: {MODELO} · via {origem}")
+    print(f"  Voz: {voz.nome}")
+    if aviso:
+        print(f"  ({aviso})")
     print("  Escreva e ele responde falando. /sair para encerrar.\n")
 
     voz.falar("Estou pronto.")
