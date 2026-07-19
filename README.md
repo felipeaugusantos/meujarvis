@@ -1,3 +1,11 @@
+> **Sobre este repositório** — `meujarvis` é um fork pessoal do
+> [OpenJarvis](https://github.com/open-jarvis/OpenJarvis), distribuído sob a
+> Apache License 2.0. Não é o projeto oficial e não tem vínculo com seus autores
+> ou com a Stanford University. Consulte o arquivo [NOTICE](NOTICE) para a
+> atribuição completa. O conteúdo abaixo é o README original do OpenJarvis.
+
+---
+
 <div align="center">
   <img alt="OpenJarvis" src="assets/OpenJarvis_Horizontal_Logo.png" width="400">
 

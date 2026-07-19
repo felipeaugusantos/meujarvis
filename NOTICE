@@ -1,0 +1,14 @@
+meujarvis
+Copyright 2026 Felipe Augusto Santos
+
+Este projeto é um trabalho derivado do OpenJarvis
+(https://github.com/open-jarvis/OpenJarvis), licenciado sob a
+Apache License, Version 2.0.
+
+OpenJarvis
+Copyright the OpenJarvis authors / Stanford University
+
+Uma cópia da Apache License 2.0 acompanha este repositório no arquivo LICENSE.
+As alterações feitas em relação ao projeto original estão registradas no
+histórico de commits deste repositório, a partir do commit
+452bcc38cf574f865a15a209f9345c52955f0e68.
