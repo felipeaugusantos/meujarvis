@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0b0f">
+  <title>Painel</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="grade">
+
+    <section class="cartao relogio">
+      <div class="hora" id="hora">--:--</div>
+      <div class="data" id="data">—</div>
+    </section>
+
+    <section class="cartao clima" id="clima">
+      <div class="carregando">carregando clima…</div>
+    </section>
+
+    <section class="cartao tarefas">
+      <h2>Tarefas de hoje</h2>
+      <form id="form-tarefa">
+        <input id="entrada-tarefa" type="text" placeholder="Adicionar tarefa…"
+               autocomplete="off" maxlength="200">
+        <button type="submit" aria-label="Adicionar">+</button>
+      </form>
+      <ul id="lista-tarefas"></ul>
+      <p class="vazio" id="tarefas-vazio">Nada por hoje.</p>
+    </section>
+
+    <section class="cartao agenda" id="agenda">
+      <h2>E-mail e agenda</h2>
+      <div class="carregando">verificando…</div>
+    </section>
+
+    <section class="cartao noticias">
+      <h2>Notícias</h2>
+      <ul id="lista-noticias"><li class="carregando">carregando…</li></ul>
+    </section>
+
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -130,3 +130,6 @@ learning.db
 minion_logs/
 *.oj-debug.json
 oj-debug.*.json
+
+# Painel: tarefas sao dados locais do usuario
+dashboard/tarefas.json

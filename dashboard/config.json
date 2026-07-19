@@ -1,0 +1,14 @@
+{
+  "cidade": "São Paulo",
+  "pais": "BR",
+  "feeds": [
+    { "nome": "G1", "url": "https://g1.globo.com/rss/g1/" },
+    { "nome": "BBC Brasil", "url": "https://feeds.bbci.co.uk/portuguese/rss.xml" },
+    { "nome": "Tecnologia", "url": "https://g1.globo.com/rss/g1/tecnologia/" }
+  ],
+  "max_noticias": 12,
+  "atualizacao_segundos": {
+    "clima": 900,
+    "noticias": 1800
+  }
+}

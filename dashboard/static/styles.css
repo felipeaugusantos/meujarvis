@@ -1,0 +1,231 @@
+/* Painel de parede — pensado para tablet fixo em paisagem, tela sempre acesa.
+   Fundo escuro e tipografia grande para leitura à distância. */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --fundo: #0b0b0f;
+  --cartao: #16161c;
+  --borda: #24242e;
+  --texto: #f2f2f5;
+  --suave: #8b8b9a;
+  --destaque: #6ea8fe;
+  --ok: #4ade80;
+}
+
+html, body {
+  height: 100%;
+  background: var(--fundo);
+  color: var(--texto);
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+.grade {
+  height: 100vh;
+  padding: 20px;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 1.15fr 1fr 1fr;
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    "relogio clima   agenda"
+    "relogio tarefas noticias";
+}
+
+.cartao {
+  background: var(--cartao);
+  border: 1px solid var(--borda);
+  border-radius: 18px;
+  padding: 22px 24px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.cartao h2 {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--suave);
+  margin-bottom: 14px;
+  flex-shrink: 0;
+}
+
+.carregando, .vazio { color: var(--suave); font-size: 0.95rem; }
+
+/* ---------------------------------------------------------------- relógio */
+
+.relogio {
+  grid-area: relogio;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+.hora {
+  font-size: clamp(4rem, 12vw, 9rem);
+  font-weight: 200;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.data {
+  margin-top: 14px;
+  font-size: clamp(0.95rem, 1.8vw, 1.4rem);
+  color: var(--suave);
+  text-transform: capitalize;
+}
+
+/* ------------------------------------------------------------------ clima */
+
+.clima { grid-area: clima; justify-content: center; }
+
+.clima-topo { display: flex; align-items: center; gap: 16px; }
+
+.clima-icone { font-size: 3.4rem; line-height: 1; }
+
+.clima-temp {
+  font-size: 3.4rem;
+  font-weight: 300;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.clima-desc { font-size: 1rem; margin-top: 10px; }
+
+.clima-meta { font-size: 0.85rem; color: var(--suave); margin-top: 4px; }
+
+.clima-prev {
+  display: flex;
+  gap: 18px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--borda);
+  font-size: 0.85rem;
+  color: var(--suave);
+}
+
+.clima-prev div { text-align: center; }
+.clima-prev .dia { text-transform: capitalize; margin-bottom: 4px; }
+.clima-prev .mx { color: var(--texto); }
+
+/* ---------------------------------------------------------------- tarefas */
+
+.tarefas { grid-area: tarefas; }
+
+#form-tarefa { display: flex; gap: 8px; margin-bottom: 14px; flex-shrink: 0; }
+
+#entrada-tarefa {
+  flex: 1;
+  background: #101016;
+  border: 1px solid var(--borda);
+  border-radius: 10px;
+  padding: 11px 14px;
+  color: var(--texto);
+  font-size: 1rem;
+  font-family: inherit;
+}
+
+#entrada-tarefa:focus { outline: none; border-color: var(--destaque); }
+
+#form-tarefa button {
+  width: 46px;
+  background: var(--destaque);
+  border: none;
+  border-radius: 10px;
+  color: #0b0b0f;
+  font-size: 1.5rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+#lista-tarefas { list-style: none; overflow-y: auto; flex: 1; }
+
+#lista-tarefas li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 2px;
+  border-bottom: 1px solid var(--borda);
+  font-size: 1.05rem;
+}
+
+/* Alvo generoso: a tela é operada por toque. */
+.caixa {
+  width: 26px;
+  height: 26px;
+  border: 2px solid var(--suave);
+  border-radius: 7px;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  font-size: 0.9rem;
+  color: transparent;
+}
+
+.feita .caixa { border-color: var(--ok); color: var(--ok); }
+.feita .rotulo { text-decoration: line-through; color: var(--suave); }
+
+.rotulo { flex: 1; word-break: break-word; }
+
+.apagar {
+  background: none;
+  border: none;
+  color: var(--suave);
+  font-size: 1.3rem;
+  cursor: pointer;
+  padding: 0 6px;
+  opacity: 0.5;
+}
+
+/* --------------------------------------------------------- e-mail /agenda */
+
+.agenda { grid-area: agenda; }
+
+.pendente {
+  font-size: 0.92rem;
+  color: var(--suave);
+  line-height: 1.55;
+}
+
+.pendente strong { color: var(--texto); font-weight: 600; }
+
+/* --------------------------------------------------------------- notícias */
+
+.noticias { grid-area: noticias; }
+
+#lista-noticias { list-style: none; overflow-y: auto; flex: 1; }
+
+#lista-noticias li {
+  padding: 11px 0;
+  border-bottom: 1px solid var(--borda);
+  font-size: 0.97rem;
+  line-height: 1.35;
+}
+
+#lista-noticias .fonte {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--suave);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-top: 5px;
+}
+
+/* Retrato ou tablets estreitos: empilha em coluna única rolável. */
+@media (max-width: 900px), (orientation: portrait) {
+  html, body { overflow: auto; }
+  .grade {
+    height: auto;
+    min-height: 100vh;
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
+    grid-template-areas: "relogio" "clima" "tarefas" "agenda" "noticias";
+  }
+  .cartao { min-height: 180px; }
+}
