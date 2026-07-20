@@ -28,6 +28,7 @@ from fastapi.responses import (
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+import atividade
 import autenticacao
 import rede
 
@@ -407,10 +408,19 @@ def rede_estado():
         # Online primeiro; dentro de cada grupo, por IP numérico.
         key=lambda a: (not a.get("online"), [int(p) for p in a.get("ip", "0.0.0.0").split(".")]),
     )
+
+    for aparelho in aparelhos:
+        usos = atividade.por_aparelho(aparelho.get("ip", ""))
+        aparelho["apps"] = usos[:4]
+        aparelho["app_agora"] = next((u["app"] for u in usos if u["agora"]), "")
+
     return {
         "itens": aparelhos,
         "online": sum(1 for a in aparelhos if a.get("online")),
         "total": len(aparelhos),
+        # A tela precisa saber se o DNS está de pé: sem ele, a ausência de
+        # aplicativos significa "não estou medindo", não "ninguém está usando".
+        "dns": atividade.disponivel(),
     }
 
 
@@ -487,8 +497,9 @@ def entrar(senha: str = Form(...)):
 
 @app.on_event("startup")
 def ligar_vigia():
-    """Varre a rede a cada 2 minutos, em segundo plano."""
+    """Varre a rede a cada 2 minutos e sobe o DNS, ambos em segundo plano."""
     rede.iniciar(intervalo=120)
+    atividade.iniciar()
 
 
 if __name__ == "__main__":

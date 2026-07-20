@@ -176,7 +176,10 @@ function desdeQuando(iso) {
 async function redeLocal() {
   try {
     const d = await json('/api/rede');
-    $('rede-contagem').textContent = d.total ? `${d.online}/${d.total}` : '';
+    // Sem DNS, ausência de app significa "não estou medindo" — e não
+    // "ninguém está usando". A tela precisa dizer qual dos dois é.
+    $('rede-contagem').textContent =
+      (d.total ? `${d.online}/${d.total}` : '') + (d.dns ? '' : ' · sem dns');
 
     const lista = $('lista-rede');
     lista.innerHTML = '';
@@ -197,9 +200,16 @@ async function redeLocal() {
 
       const detalhe = document.createElement('span');
       detalhe.className = 'detalhe';
-      detalhe.textContent = a.online
-        ? (a.eu ? 'este PC' : a.ip)
-        : desdeQuando(a.visto_em);
+
+      // O app em uso vale mais que o IP: é a informação que se procura aqui.
+      if (a.online && a.app_agora) {
+        detalhe.classList.add('usando');
+        detalhe.textContent = a.app_agora;
+      } else {
+        detalhe.textContent = a.online
+          ? (a.eu ? 'este PC' : a.ip)
+          : desdeQuando(a.visto_em);
+      }
 
       li.append(nome, detalhe);
       lista.appendChild(li);

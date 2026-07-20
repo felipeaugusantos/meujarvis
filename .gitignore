@@ -142,3 +142,7 @@ dashboard/.senha
 dashboard/.sessao
 dashboard/*.corrompido
 dashboard/*.tmp
+
+# Dados de rede e uso: informacao da familia, nunca versionada
+dashboard/aparelhos.json
+dashboard/atividade.json

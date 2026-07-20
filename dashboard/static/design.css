@@ -336,3 +336,16 @@ body::after {
     grid-template-rows: none;
   }
 }
+
+/* App em uso: destacado, porque é o dado que se procura no cartão. */
+.detalhe.usando {
+  color: var(--violeta);
+  font-family: var(--hud);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border: 1px solid rgba(167, 139, 250, 0.35);
+  border-radius: 20px;
+  background: rgba(167, 139, 250, 0.1);
+}
