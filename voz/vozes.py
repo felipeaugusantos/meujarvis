@@ -55,11 +55,48 @@ def _powershell(script: Path) -> subprocess.Popen:
     return subprocess.Popen(
         ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script)],
         stdin=subprocess.PIPE,
-        stdout=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,  # recebe o __OK__ de cada frase concluída
         stderr=subprocess.DEVNULL,
         text=True,
         encoding="utf-8",
     )
+
+
+class Pendencias:
+    """Conta frases ainda por sair no alto-falante.
+
+    O modo microfone precisa saber quando a fala terminou: se voltasse a
+    escutar antes, transcreveria a própria voz do Jarvis.
+    """
+
+    def __init__(self, proc: subprocess.Popen) -> None:
+        self.proc = proc
+        self._n = 0
+        self._trava = threading.Lock()
+        self._vazio = threading.Event()
+        self._vazio.set()
+        threading.Thread(target=self._ler, daemon=True).start()
+
+    def somar(self) -> None:
+        with self._trava:
+            self._n += 1
+            self._vazio.clear()
+
+    def subtrair(self) -> None:
+        with self._trava:
+            self._n = max(0, self._n - 1)
+            if self._n == 0:
+                self._vazio.set()
+
+    def _ler(self) -> None:
+        if self.proc.stdout is None:
+            return
+        for linha in self.proc.stdout:
+            if linha.strip() == "__OK__":
+                self.subtrair()
+
+    def aguardar(self, limite: float = 120.0) -> None:
+        self._vazio.wait(timeout=limite)
 
 
 class VozWindows:
@@ -69,6 +106,7 @@ class VozWindows:
 
     def __init__(self) -> None:
         self.proc = _powershell(BASE / "falar.ps1")
+        self.pendencias = Pendencias(self.proc)
 
     def falar(self, texto: str) -> None:
         texto = limpar(texto)
@@ -76,11 +114,15 @@ class VozWindows:
             return
         # base64: acentos não dependem da code page e nada vira comando.
         codificado = base64.b64encode(texto.encode("utf-8")).decode("ascii")
+        self.pendencias.somar()
         try:
             self.proc.stdin.write(codificado + "\n")
             self.proc.stdin.flush()
         except (BrokenPipeError, OSError):
-            pass
+            self.pendencias.subtrair()
+
+    def aguardar(self) -> None:
+        self.pendencias.aguardar()
 
     def encerrar(self) -> None:
         _encerrar(self.proc)
@@ -106,6 +148,7 @@ class VozElevenLabs:
         self.cli = httpx.Client(timeout=60)
         self.fila: Queue[str | None] = Queue()
         self.tocador = _powershell(BASE / "tocar.ps1")
+        self.pendencias = Pendencias(self.tocador)
         self.reserva: VozWindows | None = None
         self.falhas = 0
         self.desistiu = False
@@ -148,8 +191,10 @@ class VozElevenLabs:
             if texto is None:
                 break
 
-            # Já desistiu da nuvem: tudo sai pela Maria.
+            # Já desistiu da nuvem: tudo sai pela Maria, que passa a contar
+            # esta frase no lugar do tocador.
             if self.desistiu:
+                self.pendencias.subtrair()
                 self._maria().falar(texto)
                 continue
 
@@ -157,6 +202,7 @@ class VozElevenLabs:
 
             if audio is None:
                 self.falhas += 1
+                self.pendencias.subtrair()
                 self._maria().falar(texto)  # a frase não se perde
 
                 if self.falhas >= self.LIMITE_FALHAS:
@@ -181,12 +227,19 @@ class VozElevenLabs:
                     self.tocador.stdin.write(caminho + "\n")
                     self.tocador.stdin.flush()
             except (BrokenPipeError, OSError):
+                self.pendencias.subtrair()
                 break
 
     def falar(self, texto: str) -> None:
         texto = limpar(texto)
         if texto:
+            self.pendencias.somar()
             self.fila.put(texto)
+
+    def aguardar(self) -> None:
+        self.pendencias.aguardar()
+        if self.reserva is not None:
+            self.reserva.aguardar()
 
     def encerrar(self) -> None:
         self.fila.put(None)

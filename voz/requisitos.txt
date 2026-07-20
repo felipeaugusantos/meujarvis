@@ -1,0 +1,9 @@
+# Dependências do modo de voz que não vêm no OpenJarvis.
+#
+# Ficam fora do pyproject.toml de propósito: assim `git merge upstream/main`
+# nunca conflita no arquivo de dependências do projeto original.
+#
+#   uv pip install -r voz/requisitos.txt
+
+faster-whisper>=1.2      # transcrição local, sem nuvem
+sounddevice>=0.5         # captura do microfone

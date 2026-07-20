@@ -89,6 +89,8 @@ def main() -> int:
         print(f"Falta o arquivo {SCRIPT_FALA}", file=sys.stderr)
         return 1
 
+    microfone = "--microfone" in sys.argv or "-m" in sys.argv
+
     cli = httpx.Client()
     url, via_jarvis = escolher_servidor(cli)
     origem = "servidor do Jarvis" if via_jarvis else "Ollama direto"
@@ -101,20 +103,48 @@ def main() -> int:
     print(f"  Voz: {voz.nome}")
     if aviso:
         print(f"  ({aviso})")
-    print("  Escreva e ele responde falando. /sair para encerrar.\n")
+    ouvido = None
+    if microfone:
+        from ouvir import Ouvido
+
+        ouvido = Ouvido()
+        ouvido.carregar()
+        print("  Medindo o ruído da sala. Fique em silêncio…", flush=True)
+        ouvido.calibrar()
+        print("  Pode falar. Ctrl+C para encerrar.\n")
+    else:
+        print("  Escreva e ele responde falando. /sair para encerrar.\n")
 
     voz.falar("Estou pronto.")
 
     try:
         while True:
-            try:
-                entrada = input("Você> ").strip()
-            except (EOFError, KeyboardInterrupt):
-                break
+            if ouvido is not None:
+                # Só volta a escutar depois que a fala terminou de sair no
+                # alto-falante — senão o Jarvis transcreve a si mesmo.
+                voz.aguardar()
+
+                try:
+                    audio = ouvido.escutar()
+                except KeyboardInterrupt:
+                    break
+                if audio is None:
+                    continue
+
+                print("  transcrevendo…", flush=True)
+                entrada = ouvido.transcrever(audio).strip()
+                if not entrada:
+                    continue
+                print(f"Você> {entrada}")
+            else:
+                try:
+                    entrada = input("Você> ").strip()
+                except (EOFError, KeyboardInterrupt):
+                    break
 
             if not entrada:
                 continue
-            if entrada.lower() in {"/sair", "/quit", "sair"}:
+            if entrada.lower().rstrip(".!?") in {"/sair", "/quit", "sair", "tchau jarvis"}:
                 break
 
             historico.append({"role": "user", "content": entrada})

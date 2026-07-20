@@ -14,7 +14,11 @@ while ($true) {
     $caminho = [Console]::In.ReadLine()
     if ($null -eq $caminho) { break }
     if ($caminho -eq '__SAIR__') { break }
-    if (-not (Test-Path $caminho)) { continue }
+    if (-not (Test-Path $caminho)) {
+        [Console]::Out.WriteLine('__OK__')  # confirma mesmo sem tocar
+        [Console]::Out.Flush()
+        continue
+    }
 
     try {
         $tocador.Open([uri]$caminho)
@@ -38,8 +42,13 @@ while ($true) {
         $tocador.Close()
         Remove-Item $caminho -ErrorAction SilentlyContinue
     } catch {
-        continue
+        # segue adiante; a confirmação abaixo ainda precisa sair
     }
+
+    # Avisa que o áudio acabou: o modo microfone só volta a escutar depois,
+    # para o Jarvis não transcrever a própria voz.
+    [Console]::Out.WriteLine('__OK__')
+    [Console]::Out.Flush()
 }
 
 $tocador.Close()

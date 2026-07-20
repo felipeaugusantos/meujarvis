@@ -29,8 +29,14 @@ while ($true) {
             [System.Convert]::FromBase64String($linha))
         $sintetizador.Speak($texto)
     } catch {
-        continue  # linha corrompida não derruba a voz
+        # Linha corrompida não derruba a voz — mas ainda assim precisa
+        # confirmar, senão quem espera o fim da fala trava.
     }
+
+    # Avisa que a frase acabou: o modo microfone só volta a escutar depois,
+    # para o Jarvis não transcrever a própria voz.
+    [Console]::Out.WriteLine('__OK__')
+    [Console]::Out.Flush()
 }
 
 $sintetizador.Dispose()
