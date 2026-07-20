@@ -136,3 +136,9 @@ dashboard/tarefas.json
 
 # Backups da fase de design
 dashboard/static/*.bak-*
+
+# Segredos do painel: nunca versionar
+dashboard/.senha
+dashboard/.sessao
+dashboard/*.corrompido
+dashboard/*.tmp

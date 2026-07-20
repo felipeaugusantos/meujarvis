@@ -18,10 +18,17 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    RedirectResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+
+import autenticacao
 
 BASE = Path(__file__).parent
 CONFIG_PATH = BASE / "config.json"
@@ -58,6 +65,34 @@ WMO = {
 app = FastAPI(title="Painel Jarvis", docs_url=None, redoc_url=None)
 
 _cache: dict[str, tuple[float, Any]] = {}
+
+# Endereços que não exigem sessão: a própria tela de entrada e o que ela usa.
+LIVRES = {"/entrar", "/static/entrar.css", "/favicon.ico"}
+
+
+@app.middleware("http")
+async def exigir_sessao(requisicao: Request, seguir):
+    """Barra tudo enquanto não houver sessão — mas só quando há senha definida.
+
+    Sem senha configurada o painel segue aberto, como sempre foi em rede
+    local. A proteção liga junto com o túnel, que é quando passa a fazer
+    diferença. Assim ninguém fica trancado para fora do próprio painel por
+    causa de uma mudança que não pediu.
+    """
+    caminho = requisicao.url.path
+
+    if not autenticacao.tem_senha() or caminho in LIVRES:
+        return await seguir(requisicao)
+
+    if autenticacao.cookie_valido(requisicao.cookies.get(autenticacao.COOKIE)):
+        return await seguir(requisicao)
+
+    # Navegador pedindo página recebe a tela de entrada; chamada de API recebe
+    # 401, para o JavaScript saber que a sessão caiu em vez de renderizar HTML.
+    if caminho.startswith("/api/"):
+        return JSONResponse({"detail": "sessão expirada"}, status_code=401)
+
+    return RedirectResponse("/entrar", status_code=303)
 
 
 def config() -> dict:
@@ -370,6 +405,48 @@ def index():
 def face():
     """Modo cockpit em tela cheia."""
     return FileResponse(BASE / "static" / "face.html")
+
+
+# ------------------------------------------------------------------- entrada
+
+TELA_ENTRADA = """<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Jarvis</title><link rel="stylesheet" href="/static/entrar.css"></head>
+<body><form method="post" action="/entrar">
+  <h1>JARVIS</h1>
+  <input type="password" name="senha" placeholder="senha" autofocus
+         autocomplete="current-password" required>
+  <button type="submit">Entrar</button>
+  {erro}
+</form></body></html>"""
+
+
+@app.get("/entrar", response_class=HTMLResponse)
+def tela_entrada():
+    return TELA_ENTRADA.format(erro="")
+
+
+@app.post("/entrar")
+def entrar(senha: str = Form(...)):
+    if not autenticacao.conferir_senha(senha):
+        # Pausa curta: transforma um ataque de força bruta em algo inviável
+        # sem punir quem só errou a senha uma vez.
+        time.sleep(1.5)
+        return HTMLResponse(
+            TELA_ENTRADA.format(erro='<p class="erro">Senha incorreta.</p>'),
+            status_code=401,
+        )
+
+    resposta = RedirectResponse("/", status_code=303)
+    resposta.set_cookie(
+        autenticacao.COOKIE,
+        autenticacao.criar_cookie(),
+        max_age=autenticacao.VALIDADE,
+        httponly=True,      # fora do alcance de JavaScript
+        samesite="lax",
+    )
+    return resposta
 
 
 if __name__ == "__main__":
