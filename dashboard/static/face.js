@@ -76,6 +76,11 @@ async function vitais() {
 async function ambiente() {
   try {
     const c = await json('/api/clima');
+    const sol = c.nascer ? `<br>sol ${c.nascer} — ${c.ocaso}` : '';
+    // Procedência: os números vêm de duas fontes diferentes e a tela não
+    // deveria fingir que vêm de uma só.
+    const fontes = `<span class="proc">${c.fonte_agora || '—'} · ${c.fonte_previsao || '—'}</span>`;
+
     $('ambiente').innerHTML = `
       <div class="ambiente-topo">
         <div class="ambiente-icone">${ICONES[c.icone] || '☁️'}</div>
@@ -83,10 +88,67 @@ async function ambiente() {
       </div>
       <div class="ambiente-meta">
         ${c.descricao} · ${c.cidade}<br>
-        máx ${c.maxima}° / mín ${c.minima}° · umidade ${c.umidade}%
+        máx ${c.maxima}° / mín ${c.minima}° · umidade ${c.umidade}%${sol}
+        <br>${fontes}
       </div>`;
   } catch (e) {
     $('ambiente').innerHTML = '<div class="carregando">clima indisponível</div>';
+  }
+}
+
+// --------------------------------------------------------------------- rede
+
+async function redeLocal() {
+  try {
+    const d = await json('/api/rede');
+    $('rede-contagem').textContent =
+      (d.total ? `${d.online}/${d.total}` : '') + (d.dns ? '' : ' · sem dns');
+
+    const lista = $('rede');
+    lista.innerHTML = '';
+
+    // No cockpit cabe pouco: mostra quem está no ar, que é o que muda.
+    const online = d.itens.filter((a) => a.online).slice(0, 6);
+    if (!online.length) {
+      lista.innerHTML = '<li class="carregando">ninguém no ar</li>';
+      return;
+    }
+
+    for (const a of online) {
+      const li = document.createElement('li');
+      const nome = document.createElement('span');
+      nome.className = 'rede-nome';
+      // Vem da rede: sempre textContent.
+      nome.textContent = a.nome || a.fabricante || a.mac;
+
+      const uso = document.createElement('span');
+      uso.className = a.app_agora ? 'rede-app' : 'rede-ip';
+      uso.textContent = a.app_agora || (a.eu ? 'local' : a.ip.split('.').pop());
+
+      li.append(nome, uso);
+      lista.appendChild(li);
+    }
+  } catch (e) { /* mantém o que está na tela */ }
+}
+
+// -------------------------------------------------------------------- radar
+
+async function radar() {
+  try {
+    const d = await json('/api/radar');
+    if (document.querySelector('#radar iframe')) return;
+
+    const quadro = document.createElement('iframe');
+    quadro.src = d.url;
+    quadro.loading = 'lazy';
+    quadro.title = 'Radar de chuva';
+    quadro.setAttribute('sandbox', 'allow-scripts allow-same-origin');
+    quadro.setAttribute('referrerpolicy', 'no-referrer');
+
+    $('radar').innerHTML = '';
+    $('radar').appendChild(quadro);
+  } catch (e) {
+    $('radar').innerHTML = '<div class="carregando">radar indisponível</div>';
   }
 }
 
@@ -214,8 +276,12 @@ setInterval(tarefas, 30 * 1000);
 noticias();
 setInterval(noticias, 30 * 60 * 1000);
 
+redeLocal();
+setInterval(redeLocal, 30 * 1000);
+
 agenda();
 globo();
+radar();
 
 // Toque em qualquer lugar entra em tela cheia — o quiosque não tem teclado.
 document.body.addEventListener('dblclick', () => {
