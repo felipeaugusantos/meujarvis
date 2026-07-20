@@ -106,15 +106,152 @@ def _tabela_arp() -> dict[str, str]:
     return encontrados
 
 
-def _nome(ip: str) -> str:
+def _nome_dns(ip: str) -> str:
+    """DNS reverso. Funciona quando o roteador publica os nomes do DHCP."""
     try:
         return socket.gethostbyaddr(ip)[0].split(".")[0]
     except (socket.herror, socket.gaierror, OSError):
         return ""
 
 
+def _ler_nome_dns(pacote: bytes, i: int) -> tuple[str, int]:
+    """Lê um nome DNS, seguindo ponteiros de compressão.
+
+    Respostas de mDNS quase sempre comprimem o nome, referenciando um trecho
+    anterior do pacote em vez de repeti-lo. Sem seguir o ponteiro, o que se lê
+    é lixo binário.
+    """
+    partes: list[str] = []
+    saltou = False
+    fim = i
+
+    for _ in range(64):                       # trava contra ponteiro circular
+        if i >= len(pacote):
+            break
+        tamanho = pacote[i]
+
+        if tamanho == 0:
+            if not saltou:
+                fim = i + 1
+            break
+
+        if tamanho & 0xC0 == 0xC0:            # ponteiro de 2 bytes
+            if i + 1 >= len(pacote):
+                break
+            destino = ((tamanho & 0x3F) << 8) | pacote[i + 1]
+            if not saltou:
+                fim = i + 2
+                saltou = True
+            i = destino
+            continue
+
+        partes.append(pacote[i + 1:i + 1 + tamanho].decode("utf-8", "ignore"))
+        i += tamanho + 1
+
+    return ".".join(partes), fim
+
+
+def _nome_mdns(ip: str, espera: float = 1.2) -> str:
+    """Pergunta o nome pelo mDNS — o caminho que alcança celular e tablet.
+
+    iPhones, Androids recentes, impressoras e aparelhos de casa respondem em
+    224.0.0.251:5353 mesmo sem nenhum servidor central saber quem são.
+    """
+    reverso = ".".join(reversed(ip.split("."))) + ".in-addr.arpa"
+
+    cabecalho = b"\x00\x00" b"\x00\x00" b"\x00\x01" b"\x00\x00" b"\x00\x00" b"\x00\x00"
+    pergunta = b"".join(
+        bytes([len(p)]) + p.encode() for p in reverso.split(".")
+    ) + b"\x00" + b"\x00\x0c" + b"\x00\x01"   # PTR, IN
+
+    consulta = cabecalho + pergunta
+
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.settimeout(espera)
+        s.sendto(consulta, ("224.0.0.251", 5353))
+
+        limite = time.time() + espera
+        while time.time() < limite:
+            resposta, _ = s.recvfrom(2048)
+            if len(resposta) < 12 or resposta[6:8] == b"\x00\x00":
+                continue                       # sem resposta útil
+
+            # Pula a pergunta repetida e lê o nome do primeiro registro.
+            _, i = _ler_nome_dns(resposta, 12)
+            i += 4                             # tipo e classe da pergunta
+            _, i = _ler_nome_dns(resposta, i)
+            i += 10                            # tipo, classe, ttl, tamanho
+            nome, _ = _ler_nome_dns(resposta, i)
+
+            if nome:
+                s.close()
+                return nome.removesuffix(".local").split(".")[0]
+    except (OSError, socket.timeout):
+        pass
+    finally:
+        try:
+            s.close()
+        except (OSError, NameError):
+            pass
+
+    return ""
+
+
+def _nome_netbios(ip: str) -> str:
+    """Nome NetBIOS — pega máquinas Windows que os outros métodos não alcançam."""
+    try:
+        saida = subprocess.run(
+            ["nbtstat", "-A", ip], capture_output=True, text=True, timeout=4,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+    # A linha do nome do computador é a marcada com <00> e UNIQUE.
+    for linha in saida.splitlines():
+        if "<00>" in linha and "UNIQUE" in linha.upper():
+            nome = linha.split("<00>")[0].strip()
+            if nome and not nome.startswith("*"):
+                return nome
+
+    return ""
+
+
+def _nome(ip: str) -> str:
+    """Melhor nome disponível, na ordem do custo medido nesta rede.
+
+    O mDNS vem primeiro: respondeu instantaneamente para a impressora e tem
+    teto de 1,2 s quando ninguém responde — além de ser o único que alcança
+    celular e tablet. O DNS reverso gasta 4,5 s para falhar. O NetBIOS custa
+    4 s e só serve para máquinas Windows antigas, então fica por último.
+    """
+    for metodo in (_nome_mdns, _nome_dns, _nome_netbios):
+        try:
+            if (nome := metodo(ip)):
+                return nome
+        except Exception:
+            continue
+    return ""
+
+
 def fabricante(mac: str) -> str:
     return FABRICANTES.get(mac[:8], "")
+
+
+def mac_aleatorio(mac: str) -> bool:
+    """Detecta MAC gerado pelo aparelho em vez do de fábrica.
+
+    O segundo bit menos significativo do primeiro octeto é o de administração
+    local. Celulares o ligam ao sortear um endereço por rede — daí não haver
+    fabricante reconhecível e o aparelho poder reaparecer como outro se
+    esquecer o Wi-Fi e reconectar.
+    """
+    try:
+        return bool(int(mac[:2], 16) & 0b10)
+    except ValueError:
+        return False
 
 
 # ------------------------------------------------------------------ histórico
@@ -156,6 +293,33 @@ def varrer() -> dict:
     with _trava:
         conhecidos = _ler()
 
+    def precisa_nome(mac: str) -> bool:
+        registro = conhecidos.get(mac, {})
+        if registro.get("apelido") or registro.get("nome"):
+            return False
+
+        # Aparelho que não respondeu não vira mudo para sempre — mas também
+        # não se pergunta de novo a cada dois minutos. Um celular pode entrar
+        # em modo de economia e voltar a responder depois.
+        try:
+            ultima = datetime.fromisoformat(registro["tentou_em"]).timestamp()
+        except (KeyError, ValueError):
+            return True
+        return (time.time() - ultima) > 1800
+
+    # mDNS espera pela rede e o NetBIOS abre um processo. Em série, uma casa
+    # cheia levaria minutos.
+    sem_nome = [(ip, mac) for ip, mac in vistos.items() if precisa_nome(mac)]
+
+    nomes: dict[str, str] = {}
+    if sem_nome:
+        with ThreadPoolExecutor(max_workers=12) as executor:
+            achados = executor.map(_nome, [ip for ip, _ in sem_nome])
+            nomes = {ip: nome for (ip, _), nome in zip(sem_nome, achados)}
+
+    with _trava:
+        conhecidos = _ler()
+
         for ip, mac in vistos.items():
             registro = conhecidos.get(mac, {})
             registro.update({
@@ -164,9 +328,14 @@ def varrer() -> dict:
                 "online": True,
                 "visto_em": agora,
                 "fabricante": registro.get("fabricante") or fabricante(mac),
-                "nome": registro.get("apelido") or registro.get("nome") or _nome(ip),
+                "aleatorio": mac_aleatorio(mac),
+                "nome": (registro.get("apelido")
+                         or registro.get("nome")
+                         or nomes.get(ip, "")),
                 "eu": ip == meu_ip,
             })
+            if ip in nomes:
+                registro["tentou_em"] = agora
             registro.setdefault("primeira_vez", agora)
             conhecidos[mac] = registro
 

@@ -198,6 +198,19 @@ async function redeLocal() {
       // Nome do aparelho vem da rede: sempre textContent, nunca innerHTML.
       nome.textContent = a.nome || a.fabricante || a.mac;
 
+      // Segunda linha com a identidade técnica. Sem nome, o MAC é o que
+      // permite reconhecer o aparelho depois, na mão.
+      const cru = document.createElement('small');
+      cru.className = 'mac';
+      const partes = [];
+      if (a.nome && a.fabricante) partes.push(a.fabricante);
+      partes.push(a.mac);
+      // Avisa quando o MAC é sorteado: esse aparelho pode reaparecer como
+      // outro se esquecer o Wi-Fi, e não vale procurar fabricante nele.
+      if (a.aleatorio) partes.push('aleatório');
+      cru.textContent = partes.join(' · ');
+      nome.appendChild(cru);
+
       const detalhe = document.createElement('span');
       detalhe.className = 'detalhe';
 

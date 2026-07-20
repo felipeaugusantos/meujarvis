@@ -349,3 +349,23 @@ body::after {
   border-radius: 20px;
   background: rgba(167, 139, 250, 0.1);
 }
+
+/* Identidade técnica sob o nome: presente para quem procura, discreta
+   para quem só passa o olho no painel de longe. */
+#lista-rede .aparelho {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.25;
+}
+
+#lista-rede .mac {
+  font-family: var(--numero);
+  font-size: 0.64rem;
+  color: var(--suave);
+  opacity: 0.65;
+  letter-spacing: 0.02em;
+}
+
+#lista-rede li { align-items: flex-start; padding: 10px 0; }
+#lista-rede li::before { margin-top: 5px; }
