@@ -255,3 +255,84 @@ body::after {
 @media (orientation: portrait) {
   .grade { grid-template-columns: 1fr; }
 }
+
+/* ------------------------------------------------------------------- rede */
+
+.rede { grid-area: rede; }
+
+#rede-contagem {
+  margin-left: auto;
+  font-family: var(--numero);
+  letter-spacing: 0;
+  opacity: 0.7;
+}
+
+#lista-rede { list-style: none; overflow-y: auto; flex: 1; }
+
+#lista-rede li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid rgba(94, 234, 255, 0.07);
+  font-size: 0.9rem;
+}
+
+/* Bolinha de status: verde no ar, apagada fora. Lida de longe. */
+#lista-rede li::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--ok);
+  box-shadow: 0 0 8px var(--ok);
+}
+
+#lista-rede li.fora::before {
+  background: #3a4260;
+  box-shadow: none;
+}
+
+#lista-rede li.fora .aparelho { color: var(--suave); }
+
+.aparelho {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.detalhe {
+  font-family: var(--numero);
+  font-size: 0.74rem;
+  color: var(--suave);
+  flex-shrink: 0;
+}
+
+/* Rede entra como quarta coluna; notícias encolhem para dar lugar. */
+.grade {
+  grid-template-columns: 1.1fr 0.95fr 0.95fr 0.9fr;
+  grid-template-areas:
+    "relogio clima  noticias rede"
+    "tarefas agenda noticias rede";
+}
+
+@media (max-width: 1400px) {
+  .grade {
+    grid-template-columns: 1.15fr 1fr 1fr;
+    grid-template-areas:
+      "relogio clima  noticias"
+      "tarefas agenda noticias"
+      "rede    rede   rede";
+    grid-template-rows: 1fr 1fr 0.7fr;
+  }
+}
+
+@media (max-width: 900px), (orientation: portrait) {
+  .grade {
+    grid-template-columns: 1fr;
+    grid-template-areas: "relogio" "clima" "tarefas" "rede" "agenda" "noticias";
+    grid-template-rows: none;
+  }
+}

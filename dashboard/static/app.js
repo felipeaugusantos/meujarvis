@@ -161,6 +161,54 @@ async function noticias() {
   }
 }
 
+// --------------------------------------------------------------------- rede
+
+function desdeQuando(iso) {
+  if (!iso) return '';
+  const minutos = Math.floor((Date.now() - new Date(iso)) / 60000);
+  if (minutos < 2) return 'agora';
+  if (minutos < 60) return `há ${minutos} min`;
+  const horas = Math.floor(minutos / 60);
+  if (horas < 24) return `há ${horas} h`;
+  return `há ${Math.floor(horas / 24)} d`;
+}
+
+async function redeLocal() {
+  try {
+    const d = await json('/api/rede');
+    $('rede-contagem').textContent = d.total ? `${d.online}/${d.total}` : '';
+
+    const lista = $('lista-rede');
+    lista.innerHTML = '';
+
+    if (!d.itens.length) {
+      lista.innerHTML = '<li class="carregando">nenhum aparelho ainda</li>';
+      return;
+    }
+
+    for (const a of d.itens) {
+      const li = document.createElement('li');
+      li.className = a.online ? 'no-ar' : 'fora';
+
+      const nome = document.createElement('span');
+      nome.className = 'aparelho';
+      // Nome do aparelho vem da rede: sempre textContent, nunca innerHTML.
+      nome.textContent = a.nome || a.fabricante || a.mac;
+
+      const detalhe = document.createElement('span');
+      detalhe.className = 'detalhe';
+      detalhe.textContent = a.online
+        ? (a.eu ? 'este PC' : a.ip)
+        : desdeQuando(a.visto_em);
+
+      li.append(nome, detalhe);
+      lista.appendChild(li);
+    }
+  } catch (e) {
+    $('lista-rede').innerHTML = '<li class="carregando">rede indisponível</li>';
+  }
+}
+
 // -------------------------------------------------------------------- ciclo
 
 relogio();
@@ -176,3 +224,6 @@ tarefas();
 setInterval(tarefas, 60 * 1000);
 
 integracoes();
+
+redeLocal();
+setInterval(redeLocal, 60 * 1000);

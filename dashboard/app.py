@@ -29,6 +29,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import autenticacao
+import rede
 
 BASE = Path(__file__).parent
 CONFIG_PATH = BASE / "config.json"
@@ -391,6 +392,41 @@ def sistema():
     return dados
 
 
+# --------------------------------------------------------------------- rede
+
+
+class Apelido(BaseModel):
+    apelido: str
+
+
+@app.get("/api/rede")
+def rede_estado():
+    """Aparelhos vistos na rede local, com quem está online agora."""
+    aparelhos = sorted(
+        rede.listar().values(),
+        # Online primeiro; dentro de cada grupo, por IP numérico.
+        key=lambda a: (not a.get("online"), [int(p) for p in a.get("ip", "0.0.0.0").split(".")]),
+    )
+    return {
+        "itens": aparelhos,
+        "online": sum(1 for a in aparelhos if a.get("online")),
+        "total": len(aparelhos),
+    }
+
+
+@app.post("/api/rede/varrer")
+def rede_varrer():
+    rede.varrer()
+    return rede_estado()
+
+
+@app.patch("/api/rede/{mac}")
+def rede_apelidar(mac: str, corpo: Apelido):
+    if not rede.apelidar(mac.upper(), corpo.apelido):
+        raise HTTPException(404, "aparelho não encontrado")
+    return rede_estado()
+
+
 # --------------------------------------------------------------------- tela
 
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
@@ -447,6 +483,12 @@ def entrar(senha: str = Form(...)):
         samesite="lax",
     )
     return resposta
+
+
+@app.on_event("startup")
+def ligar_vigia():
+    """Varre a rede a cada 2 minutos, em segundo plano."""
+    rede.iniciar(intervalo=120)
 
 
 if __name__ == "__main__":
