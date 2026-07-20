@@ -165,6 +165,31 @@ async function noticias() {
   }
 }
 
+// -------------------------------------------------------------------- radar
+
+async function radar() {
+  try {
+    const d = await json('/api/radar');
+
+    // Só monta o iframe uma vez. Recriar a cada ciclo faria o mapa recarregar
+    // do zero, piscando na parede e baixando tudo de novo.
+    if (document.querySelector('#radar iframe')) return;
+
+    const quadro = document.createElement('iframe');
+    quadro.src = d.url;
+    quadro.loading = 'lazy';
+    quadro.title = 'Radar de chuva';
+    // Sem permissões extras: o mapa só precisa desenhar.
+    quadro.setAttribute('sandbox', 'allow-scripts allow-same-origin');
+    quadro.setAttribute('referrerpolicy', 'no-referrer');
+
+    $('radar').innerHTML = '';
+    $('radar').appendChild(quadro);
+  } catch (e) {
+    $('radar').innerHTML = '<div class="carregando">radar indisponível</div>';
+  }
+}
+
 // --------------------------------------------------------------------- rede
 
 function desdeQuando(iso) {
@@ -254,3 +279,6 @@ integracoes();
 
 redeLocal();
 setInterval(redeLocal, 60 * 1000);
+
+// O radar se recarrega sozinho por dentro do Windy; aqui basta montar.
+radar();

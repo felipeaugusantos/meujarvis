@@ -224,6 +224,40 @@ async def clima():
     return guardar("clima", resposta)
 
 
+# --------------------------------------------------------------------- radar
+
+
+@app.get("/api/radar")
+async def radar():
+    """Endereço do radar de chuva do Windy, centrado na cidade configurada.
+
+    O Windy não mede nada: ele desenha os mesmos modelos globais que o
+    Open-Meteo já entrega em número. O que ele acrescenta é o radar animado,
+    que responde o que modelo nenhum responde — se aquela nuvem vem para cá
+    ou passa de raspão.
+
+    O embed dispensa chave de API. Em compensação, é o navegador do tablet
+    que fala com o Windy: a coordenada e o IP de quem olha chegam lá.
+    """
+    cfg = config()
+    lat, lon, _ = await coordenadas(cfg["cidade"], cfg["pais"])
+
+    parametros = (
+        f"lat={lat:.4f}&lon={lon:.4f}&detailLat={lat:.4f}&detailLon={lon:.4f}"
+        "&zoom=8&level=surface&overlay=radar&product=radar"
+        "&type=map&location=coordinates"
+        # Tira menus e calendário: num painel de parede ninguém navega no
+        # mapa, e cada controle a menos é menos coisa para tocar sem querer.
+        "&menu=&message=&marker=&calendar=&pressure=&detail="
+        "&metricWind=km%2Fh&metricTemp=%C2%B0C&radarRange=-1"
+    )
+
+    return {
+        "url": f"https://embed.windy.com/embed2.html?{parametros}",
+        "fonte": "Windy",
+    }
+
+
 # ------------------------------------------------------------------ notícias
 
 
