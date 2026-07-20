@@ -106,6 +106,34 @@ def _tabela_arp() -> dict[str, str]:
     return encontrados
 
 
+def _meu_mac(meu_ip: str) -> str:
+    """MAC da placa que atende este IP.
+
+    Lido do ipconfig porque a máquina costuma ter várias interfaces — Wi-Fi,
+    cabo, WSL, VPN — e escolher a errada daria um endereço que não é o desta
+    rede. O casamento é feito pelo IP, não pelo nome do adaptador.
+    """
+    try:
+        saida = subprocess.run(
+            ["ipconfig", "/all"], capture_output=True, text=True, timeout=15,
+            encoding="latin-1",
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+    # Cada bloco de adaptador traz o MAC antes do IPv4. Guarda o último MAC
+    # visto e devolve quando o IP daquele bloco for o nosso.
+    ultimo_mac = ""
+    for linha in saida.splitlines():
+        if (achado := re.search(r"([0-9A-Fa-f]{2}(?:-[0-9A-Fa-f]{2}){5})", linha)):
+            ultimo_mac = achado.group(1).replace("-", ":").upper()
+        elif meu_ip in linha and ultimo_mac:
+            return ultimo_mac
+
+    return ""
+
+
 def _nome_dns(ip: str) -> str:
     """DNS reverso. Funciona quando o roteador publica os nomes do DHCP."""
     try:
@@ -236,6 +264,14 @@ def _nome(ip: str) -> str:
     return ""
 
 
+def _meu_nome() -> str:
+    """Hostname desta máquina, direto do sistema — sem consultar a rede."""
+    try:
+        return socket.gethostname().split(".")[0]
+    except OSError:
+        return ""
+
+
 def fabricante(mac: str) -> str:
     return FABRICANTES.get(mac[:8], "")
 
@@ -288,6 +324,13 @@ def varrer() -> dict:
         list(executor.map(_cutucar, enderecos))
 
     vistos = _tabela_arp()
+
+    # A tabela ARP lista os outros, nunca a própria máquina: um host não faz
+    # ARP de si mesmo. Sem isto o PC que roda o Jarvis some do painel — foi
+    # exatamente o que aconteceu.
+    if (meu_mac := _meu_mac(meu_ip)):
+        vistos[meu_ip] = meu_mac
+
     agora = datetime.now(timezone.utc).isoformat()
 
     with _trava:
@@ -316,6 +359,11 @@ def varrer() -> dict:
         with ThreadPoolExecutor(max_workers=12) as executor:
             achados = executor.map(_nome, [ip for ip, _ in sem_nome])
             nomes = {ip: nome for (ip, _), nome in zip(sem_nome, achados)}
+
+    # O próprio hostname vem do sistema, não da rede: é a fonte exata, e
+    # perguntar à rede pelo próprio nome é dar a volta por fora.
+    if meu_ip in nomes or meu_ip not in {ip for ip, _ in sem_nome}:
+        nomes[meu_ip] = _meu_nome() or nomes.get(meu_ip, "")
 
     with _trava:
         conhecidos = _ler()
