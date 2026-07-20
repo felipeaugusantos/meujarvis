@@ -10,16 +10,20 @@ escreveu e falharia em qualquer outra.
 
 from __future__ import annotations
 
+import json
 import queue
 import sys
 import time
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 
 TAXA = 16000          # o Whisper espera 16 kHz
 BLOCO = 1600          # 100 ms por bloco
 CANAIS = 1
+
+CONFIG_PATH = Path(__file__).parent / "config.json"
 
 
 @dataclass
@@ -30,13 +34,60 @@ class Ajustes:
     fala_minima_s: float = 0.4     # evita disparar com tosse ou clique
     espera_maxima_s: float = 25.0  # trava de segurança por elocução
     margem: float = 3.2            # quantas vezes acima do ruído conta como fala
+    dispositivo: str = ""          # trecho do nome, índice, ou vazio p/ padrão
+
+    @classmethod
+    def do_arquivo(cls) -> "Ajustes":
+        try:
+            cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))["microfone"]
+        except (OSError, KeyError, json.JSONDecodeError):
+            return cls()
+        return cls(
+            modelo=cfg.get("modelo", "small"),
+            silencio_s=cfg.get("silencio_s", 1.1),
+            margem=cfg.get("margem", 3.2),
+            dispositivo=str(cfg.get("dispositivo", "")),
+        )
+
+
+def achar_dispositivo(procurado: str) -> int | None:
+    """Resolve nome parcial ou índice para um índice de entrada válido.
+
+    Fixar o dispositivo pelo nome sobrevive à renumeração: o Windows troca os
+    índices quando um fone é conectado ou removido.
+    """
+    import sounddevice as sd
+
+    if not procurado:
+        return None
+
+    if procurado.isdigit():
+        return int(procurado)
+
+    alvo = procurado.lower()
+    for i, d in enumerate(sd.query_devices()):
+        if d["max_input_channels"] > 0 and alvo in d["name"].lower():
+            return i
+
+    print(f"  [aviso: microfone '{procurado}' não encontrado — usando o padrão]")
+    return None
 
 
 class Ouvido:
     def __init__(self, ajustes: Ajustes | None = None) -> None:
-        self.aj = ajustes or Ajustes()
+        self.aj = ajustes or Ajustes.do_arquivo()
         self.piso = 0.0
         self._modelo = None
+        self.dispositivo = achar_dispositivo(self.aj.dispositivo)
+
+    def nome_dispositivo(self) -> str:
+        import sounddevice as sd
+
+        indice = self.dispositivo if self.dispositivo is not None else sd.default.device[0]
+        try:
+            return sd.query_devices(indice)["name"].strip()
+        except Exception:
+            return "desconhecido"
 
     # ------------------------------------------------------------- modelo
 
@@ -59,7 +110,7 @@ class Ouvido:
 
         amostras: list[float] = []
         with sd.InputStream(samplerate=TAXA, channels=CANAIS, dtype="float32",
-                            blocksize=BLOCO) as fluxo:
+                            blocksize=BLOCO, device=self.dispositivo) as fluxo:
             fim = time.time() + segundos
             while time.time() < fim:
                 bloco, _ = fluxo.read(BLOCO)
@@ -93,7 +144,7 @@ class Ouvido:
         inicio_fala = 0.0
 
         with sd.InputStream(samplerate=TAXA, channels=CANAIS, dtype="float32",
-                            blocksize=BLOCO, callback=receber):
+                            blocksize=BLOCO, device=self.dispositivo, callback=receber):
             while True:
                 try:
                     bloco = fila.get(timeout=0.5)

@@ -10,5 +10,12 @@
   "windows": {
     "voz": "Microsoft Maria Desktop",
     "velocidade": 1
+  },
+  "microfone": {
+    "_ajuda": "Trecho do nome do dispositivo, ou o índice. Vazio = padrão do Windows. Veja a lista com: uv run python voz/diagnostico.py 1",
+    "dispositivo": "HP DHE-8003U",
+    "modelo": "small",
+    "margem": 3.2,
+    "silencio_s": 1.1
   }
 }

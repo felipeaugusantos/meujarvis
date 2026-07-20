@@ -18,6 +18,7 @@ from pathlib import Path
 
 import httpx
 
+from ferramentas import consultar
 from vozes import escolher
 
 BASE = Path(__file__).parent
@@ -125,9 +126,11 @@ def main() -> int:
         from ouvir import Ouvido
 
         ouvido = Ouvido()
+        print(f"  Microfone: {ouvido.nome_dispositivo()}")
         ouvido.carregar()
         print("  Medindo o ruído da sala. Fique em silêncio…", flush=True)
         ouvido.calibrar()
+        print(f"  Ruído da sala: {ouvido.piso:.4f} · limiar: {ouvido.limiar:.4f}")
         print("  Pode falar. Ctrl+C para encerrar.\n")
     else:
         print("  Escreva e ele responde falando. /sair para encerrar.\n")
@@ -163,6 +166,21 @@ def main() -> int:
                 continue
             if entrada.lower().rstrip(".!?") in {"/sair", "/quit", "sair", "tchau jarvis"}:
                 break
+
+            # Dado real, quando a pergunta pede um. Entra como mensagem de
+            # sistema logo antes da pergunta: fica perto o suficiente para o
+            # modelo usar, sem virar parte do que o usuário disse.
+            dado = consultar(entrada)
+            if dado:
+                historico.append({
+                    "role": "system",
+                    "content": (
+                        f"Dado real do sistema, consultado agora: {dado}\n"
+                        "Responda usando exclusivamente este dado. Não invente "
+                        "números nem complemente com suposições. Se começar com "
+                        "FALHA, diga apenas que não conseguiu consultar."
+                    ),
+                })
 
             historico.append({"role": "user", "content": entrada})
 
