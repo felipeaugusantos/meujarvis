@@ -439,7 +439,29 @@ def rede_apelidar(mac: str, corpo: Apelido):
 
 # --------------------------------------------------------------------- tela
 
-app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
+class EstaticosSemCache(StaticFiles):
+    """Arquivos estáticos que o navegador sempre revalida.
+
+    Sem isto, uma tela já aberta continua rodando o JavaScript antigo depois
+    de uma atualização: o HTML novo chega, o script velho fica, e a página
+    quebra de um jeito silencioso — foi o que aconteceu com o cartão de rede,
+    preso no texto de carregamento.
+
+    'no-cache' não proíbe o cache: obriga a perguntar se mudou. O ganho de
+    banda que se perde é irrelevante num painel servido pela própria casa.
+    """
+
+    def is_not_modified(self, response_headers, request_headers) -> bool:
+        response_headers["Cache-Control"] = "no-cache, must-revalidate"
+        return super().is_not_modified(response_headers, request_headers)
+
+    async def get_response(self, path: str, scope):
+        resposta = await super().get_response(path, scope)
+        resposta.headers["Cache-Control"] = "no-cache, must-revalidate"
+        return resposta
+
+
+app.mount("/static", EstaticosSemCache(directory=BASE / "static"), name="static")
 
 
 @app.get("/")
