@@ -36,6 +36,7 @@ import rede
 BASE = Path(__file__).parent
 CONFIG_PATH = BASE / "config.json"
 TASKS_PATH = BASE / "tarefas.json"
+BACKUP_TASKS = BASE / "tarefas.anterior.json"
 
 GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search"
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
@@ -340,17 +341,53 @@ def ler_tarefas() -> list[dict]:
 
 
 def gravar_tarefas(tarefas: list[dict]) -> None:
-    """Grava de forma atômica.
+    """Grava de forma atômica, guardando a versão anterior antes.
 
     Escrever direto no destino deixa uma janela em que o arquivo está pela
     metade: quem ler nesse instante vê JSON inválido. Grava ao lado e troca —
     no Windows, os.replace também é atômico.
+
+    A cópia de segurança existe porque a lista já sumiu três vezes durante o
+    desenvolvimento e a causa nunca foi reproduzida. Enquanto não se sabe o
+    porquê, o que se pode garantir é que nada seja perdido sem deixar rastro.
     """
+    anterior = TASKS_PATH.read_text(encoding="utf-8") if TASKS_PATH.exists() else "[]"
+
+    # Esvaziar uma lista cheia é raro e quase sempre indesejado. Registra alto,
+    # para que a próxima vez apareça no log em vez de virar mistério.
+    if not tarefas and anterior.strip() not in ("", "[]"):
+        print(
+            f"[tarefas] ATENCAO: gravando lista vazia sobre {len(anterior)} bytes. "
+            f"Copia em {BACKUP_TASKS.name}",
+            flush=True,
+        )
+
+    if anterior.strip() not in ("", "[]"):
+        try:
+            BACKUP_TASKS.write_text(anterior, encoding="utf-8")
+        except OSError:
+            pass
+
     temporario = TASKS_PATH.with_suffix(".tmp")
     temporario.write_text(
         json.dumps(tarefas, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     os.replace(temporario, TASKS_PATH)
+
+
+@app.post("/api/tarefas/restaurar")
+def restaurar_tarefas():
+    """Repõe a última versão não vazia conhecida."""
+    if not BACKUP_TASKS.exists():
+        raise HTTPException(404, "não há cópia de segurança")
+
+    try:
+        recuperadas = json.loads(BACKUP_TASKS.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        raise HTTPException(500, "cópia de segurança ilegível")
+
+    gravar_tarefas(recuperadas)
+    return {"itens": recuperadas}
 
 
 @app.get("/api/tarefas")

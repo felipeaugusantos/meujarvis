@@ -513,3 +513,45 @@ body::after {
   max-height: 100%;
   overflow-y: auto;
 }
+
+/* --------------------------------------------------- ajustes de ocupação */
+
+/* Os flancos nasceram centrados, com dois blocos cada. Com três, o centro
+   deixava um vão grande no topo e a coluna encostava no rodapé. Passam a
+   preencher a altura e distribuir o espaço entre os blocos. */
+.cockpit { align-items: stretch; }
+
+.flanco {
+  justify-content: space-between;
+  gap: 14px;
+  padding: 4px 0;
+}
+
+.hud { flex-shrink: 0; }
+
+/* O radar é o único que pode crescer: mapa aproveita toda altura sobrando. */
+.hud-radar { flex: 1 1 auto; min-height: 190px; }
+
+/* O embed do Windy tem largura mínima própria e vazava do cartão pela
+   direita, cortando a barra de tempo. Escala o mapa inteiro para caber em
+   vez de recortá-lo. */
+.moldura-radar {
+  position: relative;
+  width: 100%;
+}
+
+.moldura-radar iframe {
+  position: absolute;
+  inset: 0;
+  width: 140%;
+  height: 140%;
+  transform: scale(0.714);      /* 1 / 1.4 — devolve ao tamanho do cartão */
+  transform-origin: top left;
+}
+
+/* Em telas largas o cockpit espalhava demais; limita e centraliza. */
+.cockpit {
+  max-width: 1700px;
+  margin: 0 auto;
+  width: 100%;
+}
