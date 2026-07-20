@@ -133,3 +133,6 @@ oj-debug.*.json
 
 # Painel: tarefas sao dados locais do usuario
 dashboard/tarefas.json
+
+# Backups da fase de design
+dashboard/static/*.bak-*

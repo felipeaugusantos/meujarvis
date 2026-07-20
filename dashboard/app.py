@@ -293,6 +293,50 @@ def integracoes():
     }
 
 
+# ------------------------------------------------------------------ sinais
+
+
+@app.get("/api/sistema")
+def sistema():
+    """Sinais vitais da máquina que hospeda o Jarvis.
+
+    Cada bloco degrada sozinho: sem GPU NVIDIA, a tela mostra o resto em vez
+    de ficar vazia.
+    """
+    dados: dict[str, Any] = {"cpu": None, "ram": None, "gpu": None, "vram": None}
+
+    try:
+        import psutil
+
+        dados["cpu"] = psutil.cpu_percent(interval=0.15)
+        dados["ram"] = psutil.virtual_memory().percent
+    except Exception:
+        pass
+
+    try:
+        import pynvml
+
+        pynvml.nvmlInit()
+        placa = pynvml.nvmlDeviceGetHandleByIndex(0)
+        dados["gpu"] = pynvml.nvmlDeviceGetUtilizationRates(placa).gpu
+        memoria = pynvml.nvmlDeviceGetMemoryInfo(placa)
+        dados["vram"] = round(memoria.used / memoria.total * 100, 1)
+        nome = pynvml.nvmlDeviceGetName(placa)
+        dados["placa"] = nome.decode() if isinstance(nome, bytes) else nome
+    except Exception:
+        pass
+
+    # O modelo local responde? É o sinal que diz se o Jarvis está de fato vivo.
+    try:
+        with httpx.Client(timeout=2) as cli:
+            cli.get("http://127.0.0.1:11434/api/tags").raise_for_status()
+        dados["modelo"] = "online"
+    except Exception:
+        dados["modelo"] = "offline"
+
+    return dados
+
+
 # --------------------------------------------------------------------- tela
 
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
@@ -301,6 +345,12 @@ app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 @app.get("/")
 def index():
     return FileResponse(BASE / "static" / "index.html")
+
+
+@app.get("/face")
+def face():
+    """Modo cockpit em tela cheia."""
+    return FileResponse(BASE / "static" / "face.html")
 
 
 if __name__ == "__main__":

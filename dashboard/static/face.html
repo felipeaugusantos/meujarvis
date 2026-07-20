@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#05060f">
+  <title>JARVIS</title>
+  <link rel="stylesheet" href="/static/face.css">
+</head>
+<body>
+
+  <!-- Moldura do cockpit -->
+  <div class="moldura" aria-hidden="true">
+    <span class="canto ct-se"></span><span class="canto ct-sd"></span>
+    <span class="canto ct-ie"></span><span class="canto ct-id"></span>
+  </div>
+
+  <main class="cockpit">
+
+    <!-- ---------------------------------------------------- coluna esquerda -->
+    <aside class="flanco esquerda">
+      <section class="hud">
+        <h2>Sinais vitais</h2>
+        <div class="medidores" id="medidores"></div>
+      </section>
+
+      <section class="hud">
+        <h2>Ambiente</h2>
+        <div id="ambiente" class="carregando">—</div>
+      </section>
+    </aside>
+
+    <!-- ------------------------------------------------------------ núcleo -->
+    <section class="nucleo">
+      <div class="aneis">
+        <canvas id="globo" width="440" height="440"></canvas>
+        <span class="anel a1"></span>
+        <span class="anel a2"></span>
+        <span class="anel a3"></span>
+        <span class="anel tracos"></span>
+        <span class="caroco"></span>
+      </div>
+
+      <div class="marcacao">
+        <div class="hora" id="hora">--:--</div>
+        <div class="data" id="data">—</div>
+        <div class="estado" id="estado">iniciando</div>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------ coluna direita -->
+    <aside class="flanco direita">
+      <section class="hud">
+        <h2>Tarefas</h2>
+        <ul id="tarefas" class="lista"><li class="carregando">—</li></ul>
+      </section>
+
+      <section class="hud">
+        <h2>Agenda</h2>
+        <div id="agenda" class="carregando">—</div>
+      </section>
+    </aside>
+
+  </main>
+
+  <!-- Faixa de manchetes -->
+  <footer class="rodape">
+    <div class="rotulo">Notícias</div>
+    <div class="esteira"><div class="trilho" id="trilho">carregando…</div></div>
+  </footer>
+
+  <a class="voltar" href="/">painel</a>
+
+  <script src="/static/face.js"></script>
+</body>
+</html>

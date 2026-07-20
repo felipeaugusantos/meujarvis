@@ -1,0 +1,257 @@
+/* ===========================================================================
+   CAMADA DE DESIGN — cockpit HUD
+   ---------------------------------------------------------------------------
+   Carregada depois de styles.css e só sobrescreve aparência. Remover a linha
+   <link id="design-layer"> devolve o painel ao visual anterior, intacto.
+
+   Nenhum id, classe usada pelo JavaScript ou estrutura de HTML é tocado aqui:
+   o rearranjo do layout é feito por grid-template-areas, não mexendo no DOM.
+
+   Fontes: pilha do sistema em vez de Google Fonts. Um painel de parede não
+   pode depender de CDN — sem internet, a tipografia inteira cairia.
+   =========================================================================== */
+
+:root {
+  --ciano: #5eeaff;
+  --violeta: #a78bfa;
+  --ok: #34e5a0;
+  --alerta: #ffb35e;
+
+  --vidro: rgba(14, 20, 38, 0.52);
+  --borda: rgba(94, 234, 255, 0.16);
+  --borda-viva: rgba(94, 234, 255, 0.55);
+
+  --raio: 12px;
+  --hud: 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif;
+  --numero: 'Cascadia Mono', 'Consolas', ui-monospace, monospace;
+}
+
+body { font-family: var(--hud); }
+
+/* --------------------------------------------------------------- ambiente */
+
+/* Varredura vertical lenta, como um radar percorrendo a tela. 22 s é longo o
+   bastante para não virar um piscar irritante em tela sempre acesa. */
+body::after {
+  background-image:
+    linear-gradient(rgba(94, 234, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(94, 234, 255, 0.05) 1px, transparent 1px);
+  background-size: 54px 54px;
+  animation: deriva 60s linear infinite;
+}
+
+@keyframes deriva {
+  from { background-position: 0 0, 0 0; }
+  to   { background-position: 54px 54px, 54px 54px; }
+}
+
+/* ----------------------------------------------------------------- layout */
+
+/* Notícias ocupam a coluna direita inteira: é o bloco que mais cresce, e em
+   coluna alta cabem mais manchetes sem rolagem. Relógio e tarefas ficam
+   empilhados à esquerda, na zona que o olho alcança primeiro. */
+.grade {
+  grid-template-columns: 1.25fr 1fr 1fr;
+  grid-template-rows: 1.05fr 1fr;
+  grid-template-areas:
+    "relogio clima  noticias"
+    "tarefas agenda noticias";
+  gap: 14px;
+  padding: 16px;
+}
+
+/* ---------------------------------------------------------------- cartões */
+
+.cartao {
+  border-radius: var(--raio);
+  border-color: var(--borda);
+  background: linear-gradient(160deg, rgba(20, 28, 52, 0.62), rgba(8, 12, 26, 0.5));
+  box-shadow:
+    0 0 0 1px rgba(94, 234, 255, 0.05) inset,
+    0 0 30px rgba(94, 234, 255, 0.05) inset,
+    0 20px 46px rgba(0, 0, 0, 0.55);
+}
+
+/* Cantoneiras: dois L luminosos em diagonais opostas. É o traço que mais
+   comunica "instrumento" com menos tinta. */
+.cartao::after {
+  content: '';
+  position: absolute;
+  inset: 7px;
+  border-radius: calc(var(--raio) - 4px);
+  pointer-events: none;
+  background:
+    linear-gradient(var(--borda-viva), var(--borda-viva)) left top / 14px 1px no-repeat,
+    linear-gradient(var(--borda-viva), var(--borda-viva)) left top / 1px 14px no-repeat,
+    linear-gradient(var(--borda-viva), var(--borda-viva)) right bottom / 14px 1px no-repeat,
+    linear-gradient(var(--borda-viva), var(--borda-viva)) right bottom / 1px 14px no-repeat;
+  opacity: 0.75;
+}
+
+/* Filete superior deslizando — dá o sinal de "vivo" sem chamar atenção. */
+.cartao::before {
+  left: 12px;
+  right: 12px;
+  background: linear-gradient(90deg,
+    transparent, var(--ciano), var(--violeta), transparent);
+  background-size: 55% 100%;
+  background-repeat: no-repeat;
+  animation: correr 7s ease-in-out infinite;
+  opacity: 0.7;
+}
+
+/* Desencontro entre cartões: pulsos simultâneos parecem defeito, não vida. */
+.clima::before    { animation-delay: -1.4s; }
+.tarefas::before  { animation-delay: -2.8s; }
+.agenda::before   { animation-delay: -4.2s; }
+.noticias::before { animation-delay: -5.6s; }
+
+@keyframes correr {
+  0%   { background-position: -60% 0; }
+  100% { background-position: 160% 0; }
+}
+
+.cartao h2 {
+  font-size: 0.66rem;
+  letter-spacing: 0.28em;
+  color: var(--ciano);
+  opacity: 0.9;
+}
+
+.cartao h2::before {
+  animation: bater 2.6s ease-in-out infinite;
+}
+
+@keyframes bater {
+  0%, 100% { opacity: 1;   box-shadow: 0 0 9px var(--ciano); }
+  50%      { opacity: 0.35; box-shadow: 0 0 3px var(--ciano); }
+}
+
+/* ---------------------------------------------------------------- relógio */
+
+.relogio { overflow: visible; }
+
+/* Anéis concêntricos atrás do relógio — o núcleo do cockpit. */
+.relogio::after {
+  inset: 0;
+  background: none;
+  border: none;
+  opacity: 1;
+}
+
+.hora {
+  font-family: var(--numero);
+  font-weight: 300;
+  letter-spacing: 0.01em;
+  background: linear-gradient(175deg, #ffffff 8%, var(--ciano) 78%, var(--violeta) 130%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 70px rgba(94, 234, 255, 0.3);
+  animation: respirar 5.5s ease-in-out infinite;
+}
+
+@keyframes respirar {
+  0%, 100% { filter: brightness(1);    }
+  50%      { filter: brightness(1.14); }
+}
+
+.data {
+  font-size: clamp(0.72rem, 1.2vw, 0.95rem);
+  letter-spacing: 0.34em;
+  color: var(--ciano);
+  opacity: 0.6;
+}
+
+/* ------------------------------------------------------------------ clima */
+
+.clima-icone { animation: flutuar 6s ease-in-out infinite; }
+
+@keyframes flutuar {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-5px); }
+}
+
+.clima-temp {
+  font-family: var(--numero);
+  font-weight: 300;
+  text-shadow: 0 0 34px rgba(94, 234, 255, 0.28);
+}
+
+.clima-desc {
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.82rem;
+  color: var(--ciano);
+  opacity: 0.9;
+}
+
+.clima-prev { justify-content: space-between; }
+.clima-prev .mx, .clima-prev div { font-family: var(--numero); }
+.clima-prev .dia { font-family: var(--hud); }
+
+/* ---------------------------------------------------------------- tarefas */
+
+#entrada-tarefa { border-radius: calc(var(--raio) - 4px); }
+
+#form-tarefa button {
+  border-radius: calc(var(--raio) - 4px);
+  box-shadow: 0 0 18px rgba(94, 234, 255, 0.3);
+}
+
+/* Marcar tarefa dá um retorno visível a um metro de distância. */
+.feita .caixa { animation: confirmar 0.45s ease-out; }
+
+@keyframes confirmar {
+  0%   { transform: scale(1);    box-shadow: 0 0 0 0 rgba(52, 229, 160, 0.55); }
+  55%  { transform: scale(1.22); box-shadow: 0 0 0 11px rgba(52, 229, 160, 0); }
+  100% { transform: scale(1);    box-shadow: 0 0 12px rgba(52, 229, 160, 0.28); }
+}
+
+/* --------------------------------------------------------------- notícias */
+
+/* Marcador na lateral de cada manchete, no lugar do marcador de lista. */
+#lista-noticias li {
+  position: relative;
+  padding-left: 15px;
+}
+
+#lista-noticias li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 17px;
+  width: 5px;
+  height: 5px;
+  background: var(--violeta);
+  transform: rotate(45deg);
+  opacity: 0.65;
+}
+
+#lista-noticias .fonte { letter-spacing: 0.18em; }
+
+/* --------------------------------------------------------- e-mail /agenda */
+
+.pendente strong { color: var(--alerta); }
+
+/* ------------------------------------------------------------------ toque */
+
+/* Sem :hover num painel de parede — o dedo não paira. O retorno vem no toque. */
+.caixa:active     { transform: scale(0.9); }
+.apagar:active    { opacity: 1; }
+#form-tarefa button:active { transform: scale(0.94); }
+
+/* --------------------------------------------------------- acessibilidade */
+
+@media (prefers-reduced-motion: reduce) {
+  .cartao::before,
+  .cartao h2::before,
+  .hora,
+  .clima-icone,
+  body::after { animation: none; }
+}
+
+/* Retrato: a coluna única de styles.css continua valendo; só reduz o exagero. */
+@media (orientation: portrait) {
+  .grade { grid-template-columns: 1fr; }
+}
