@@ -30,6 +30,7 @@ from pydantic import BaseModel
 
 import atividade
 import autenticacao
+import inmet
 import rede
 
 BASE = Path(__file__).parent
@@ -175,20 +176,52 @@ async def clima():
         for i in range(1, min(4, len(diario["time"])))
     ]
 
-    return guardar(
-        "clima",
-        {
-            "cidade": nome,
-            "temperatura": round(atual["temperature_2m"]),
-            "sensacao": round(atual["apparent_temperature"]),
-            "umidade": atual["relative_humidity_2m"],
-            "descricao": descricao,
-            "icone": icone,
-            "maxima": round(diario["temperature_2m_max"][0]),
-            "minima": round(diario["temperature_2m_min"][0]),
-            "proximos": proximos,
-        },
-    )
+    resposta = {
+        "cidade": nome,
+        # Medição do momento: só o Open-Meteo tem. O INMET não publica
+        # temperatura atual para a cidade, e não há estação automática aqui.
+        "temperatura": round(atual["temperature_2m"]),
+        "sensacao": round(atual["apparent_temperature"]),
+        "umidade": atual["relative_humidity_2m"],
+        "fonte_agora": "Open-Meteo",
+        "descricao": descricao,
+        "icone": icone,
+        "maxima": round(diario["temperature_2m_max"][0]),
+        "minima": round(diario["temperature_2m_min"][0]),
+        "proximos": proximos,
+        "fonte_previsao": "Open-Meteo",
+    }
+
+    # Previsão e descrição preferem o INMET: é o instituto nacional, escreve
+    # em português e conhece o regime de chuva daqui melhor que um modelo
+    # global interpolado. Falhando, fica o que o Open-Meteo já trouxe.
+    if (geocodigo := cfg.get("geocodigo_ibge")):
+        if (br := inmet.previsao(str(geocodigo))):
+            dias = br["dias"]
+            hoje = dias[0]
+
+            resposta.update({
+                "descricao": hoje["resumo"] or resposta["descricao"],
+                "icone": hoje["icone"],
+                "maxima": hoje["max"],
+                "minima": hoje["min"],
+                "nascer": hoje.get("nascer", ""),
+                "ocaso": hoje.get("ocaso", ""),
+                "fonte_previsao": "INMET",
+                "proximos": [
+                    {
+                        # Converte dd/mm/aaaa para aaaa-mm-dd, que é o formato
+                        # que a tela já sabe ler do Open-Meteo.
+                        "data": "-".join(reversed(d["data"].split("/"))),
+                        "max": d["max"],
+                        "min": d["min"],
+                        "icone": d["icone"],
+                    }
+                    for d in dias[1:4]
+                ],
+            })
+
+    return guardar("clima", resposta)
 
 
 # ------------------------------------------------------------------ notícias

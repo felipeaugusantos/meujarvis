@@ -369,3 +369,15 @@ body::after {
 
 #lista-rede li { align-items: flex-start; padding: 10px 0; }
 #lista-rede li::before { margin-top: 5px; }
+
+/* Procedência dos números: quem olha de longe não vê, quem chega perto sabe. */
+.clima-fonte {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(94, 234, 255, 0.07);
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--suave);
+  opacity: 0.65;
+}

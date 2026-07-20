@@ -2,14 +2,27 @@
   "cidade": "Ribeirão Preto",
   "pais": "BR",
   "feeds": [
-    { "nome": "Ribeirão e Franca", "url": "https://g1.globo.com/rss/g1/sp/ribeirao-preto-franca/" },
-    { "nome": "G1", "url": "https://g1.globo.com/rss/g1/" },
-    { "nome": "BBC Brasil", "url": "https://feeds.bbci.co.uk/portuguese/rss.xml" },
-    { "nome": "Tecnologia", "url": "https://g1.globo.com/rss/g1/tecnologia/" }
+    {
+      "nome": "Ribeirão e Franca",
+      "url": "https://g1.globo.com/rss/g1/sp/ribeirao-preto-franca/"
+    },
+    {
+      "nome": "G1",
+      "url": "https://g1.globo.com/rss/g1/"
+    },
+    {
+      "nome": "BBC Brasil",
+      "url": "https://feeds.bbci.co.uk/portuguese/rss.xml"
+    },
+    {
+      "nome": "Tecnologia",
+      "url": "https://g1.globo.com/rss/g1/tecnologia/"
+    }
   ],
   "max_noticias": 12,
   "atualizacao_segundos": {
     "clima": 900,
     "noticias": 1800
-  }
+  },
+  "geocodigo_ibge": "3543402"
 }

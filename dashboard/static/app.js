@@ -51,8 +51,12 @@ async function clima() {
       <div class="clima-meta">
         ${c.cidade} · máx ${c.maxima}° / mín ${c.minima}° ·
         sensação ${c.sensacao}° · umidade ${c.umidade}%
+        ${c.nascer ? `<br>sol ${c.nascer} — ${c.ocaso}` : ''}
       </div>
-      <div class="clima-prev">${prev}</div>`;
+      <div class="clima-prev">${prev}</div>
+      <div class="clima-fonte">
+        agora: ${c.fonte_agora || '—'} · previsão: ${c.fonte_previsao || '—'}
+      </div>`;
   } catch (e) {
     $('clima').innerHTML = '<div class="carregando">clima indisponível</div>';
   }
