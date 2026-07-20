@@ -150,6 +150,10 @@ def testar() -> int:
     """Diagnóstico: mostra os microfones e transcreve uma frase."""
     import sounddevice as sd
 
+    from jarvis_voz import preparar_saida
+
+    preparar_saida()
+
     print("\n  Entradas de áudio disponíveis:\n")
     for i, d in enumerate(sd.query_devices()):
         if d["max_input_channels"] > 0:

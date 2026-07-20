@@ -84,7 +84,24 @@ def responder(cli: httpx.Client, url: str, via_jarvis: bool, historico: list[dic
                     yield pedaco
 
 
+def preparar_saida() -> None:
+    """Garante UTF-8 no console.
+
+    O console do Windows abre em cp1252, onde acentos e símbolos como ● não
+    existem: sem isto, o primeiro print com um desses derruba o programa por
+    UnicodeEncodeError. O errors='replace' é a rede de segurança — nenhum
+    caractere exótico deve ser capaz de encerrar uma conversa.
+    """
+    for fluxo in (sys.stdout, sys.stderr):
+        try:
+            fluxo.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def main() -> int:
+    preparar_saida()
+
     if not SCRIPT_FALA.exists():
         print(f"Falta o arquivo {SCRIPT_FALA}", file=sys.stderr)
         return 1
