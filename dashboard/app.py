@@ -9,6 +9,7 @@ Serve uma tela de quiosque com relógio, clima, tarefas e notícias.
 from __future__ import annotations
 
 import json
+import os
 import time
 import uuid
 import xml.etree.ElementTree as ET
@@ -219,15 +220,33 @@ def ler_tarefas() -> list[dict]:
     if not TASKS_PATH.exists():
         return []
     try:
-        return json.loads(TASKS_PATH.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return []
+        dados = json.loads(TASKS_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        # Arquivo ilegível não é arquivo vazio. Devolver [] aqui fazia a
+        # gravação seguinte apagar tudo de verdade: uma leitura ruim virava
+        # perda permanente. Preserva o original para inspeção e recusa.
+        estrago = TASKS_PATH.with_suffix(".corrompido")
+        try:
+            estrago.write_bytes(TASKS_PATH.read_bytes())
+        except OSError:
+            pass
+        raise HTTPException(500, "arquivo de tarefas ilegível; nada foi alterado")
+
+    return dados if isinstance(dados, list) else []
 
 
 def gravar_tarefas(tarefas: list[dict]) -> None:
-    TASKS_PATH.write_text(
+    """Grava de forma atômica.
+
+    Escrever direto no destino deixa uma janela em que o arquivo está pela
+    metade: quem ler nesse instante vê JSON inválido. Grava ao lado e troca —
+    no Windows, os.replace também é atômico.
+    """
+    temporario = TASKS_PATH.with_suffix(".tmp")
+    temporario.write_text(
         json.dumps(tarefas, ensure_ascii=False, indent=2), encoding="utf-8"
     )
+    os.replace(temporario, TASKS_PATH)
 
 
 @app.get("/api/tarefas")

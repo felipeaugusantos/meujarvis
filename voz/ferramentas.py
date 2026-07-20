@@ -15,11 +15,31 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from dataclasses import dataclass
 from datetime import datetime
 
 import httpx
 
 PAINEL = "http://127.0.0.1:8001"
+
+
+@dataclass
+class Resultado:
+    """Saída de uma ferramenta.
+
+    O `ok` existe para que a falha nunca chegue ao modelo. Antes, o texto de
+    erro ia junto com a instrução "se começar com FALHA, diga que não
+    conseguiu" — e o modelo respondeu literalmente "FALHA em consultar as
+    tarefas". Instrução em prompt é sugestão; o que precisa ser garantido tem
+    de ficar no código.
+    """
+
+    ok: bool
+    texto: str
+    # Ação marca o que mudou o estado do sistema. A confirmação dessas nunca
+    # passa pelo modelo: ele já disse "não consegui criar" logo depois de
+    # criar. Consulta pode ser parafraseada; ação, não.
+    acao: bool = False
 
 DIAS = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira",
         "sexta-feira", "sábado", "domingo"]
@@ -51,10 +71,10 @@ def _buscar(caminho: str) -> dict | None:
 # ------------------------------------------------------------------ consultas
 
 
-def clima() -> str:
+def clima() -> Resultado:
     d = _buscar("/api/clima")
     if not d:
-        return "FALHA: o painel não respondeu, então não há dado de clima."
+        return Resultado(False, "não consegui consultar o clima: o painel não está respondendo")
 
     linhas = [
         f"Clima agora em {d['cidade']}: {d['temperatura']} graus, {d['descricao'].lower()}.",
@@ -73,19 +93,19 @@ def clima() -> str:
     if d["umidade"] < 30:
         linhas.append("Atenção: umidade muito baixa.")
 
-    return " ".join(linhas)
+    return Resultado(True, " ".join(linhas))
 
 
-def tarefas() -> str:
+def tarefas() -> Resultado:
     d = _buscar("/api/tarefas")
     if d is None:
-        return "FALHA: o painel não respondeu, então não há lista de tarefas."
+        return Resultado(False, "não consegui consultar as tarefas: o painel não está respondendo")
 
     pendentes = [t["texto"] for t in d["itens"] if not t["feita"]]
     feitas = [t["texto"] for t in d["itens"] if t["feita"]]
 
     if not d["itens"]:
-        return "A lista de tarefas está vazia."
+        return Resultado(True, "A lista de tarefas está vazia.")
 
     partes = []
     if pendentes:
@@ -94,79 +114,136 @@ def tarefas() -> str:
         partes.append("Nenhuma tarefa pendente.")
     if feitas:
         partes.append(f"Já concluídas: {len(feitas)}.")
-    return " ".join(partes)
+    return Resultado(True, " ".join(partes))
 
 
-def anotar(texto: str) -> str:
+# Tudo que costuma vir antes do conteúdo real de um pedido falado. A ordem de
+# alternância não importa porque o padrão é aplicado repetidamente até parar de
+# casar: "preciso que você crie uma nova tarefa, marcando o médico" precisa de
+# várias passadas para sobrar só "marcando o médico".
+PREFIXO = re.compile(
+    r"^\s*(?:"
+    r"jarvis|por favor|entao|então|olha|escuta|ei|oi|ola|olá|nao|não|sim|"
+    r"eu\s+|voce\s+|você\s+|"
+    r"preciso|precisava|queria|quero|gostaria|pode|poderia|consegue|conseguiria|"
+    r"que|de|do|da|me|pra|para|"
+    r"anota[r]?|anote|adiciona[r]?|adicione|cria[r]?|crie|registra[r]?|registre|"
+    r"marca[r]?|marque|agenda[r]?|agende|coloca[r]?|coloque|poe|põe|bota[r]?|"
+    r"lembra[r]?|lembre|salva[r]?|salve|guarda[r]?|guarde|"
+    r"uma|um|nova|novo|outra|outro|"
+    r"tarefa|tarefas|lembrete|nota|anotacao|anotação|item|compromisso|"
+    r"na\s+lista|na\s+minha\s+lista|no\s+painel|pra\s+mim|para\s+mim"
+    r")\b[\s,:.]*",
+    re.IGNORECASE,
+)
+
+
+# Fecho de cortesia, que nunca faz parte da tarefa.
+SUFIXO = re.compile(
+    r"[\s,]*(?:para\s+mim|pra\s+mim|por\s+favor|obrigado|obrigada|"
+    r"na\s+lista|no\s+painel|ta\s+bom|tá\s+bom|ok|beleza)\s*$",
+    re.IGNORECASE,
+)
+
+# Sobras que não descrevem tarefa nenhuma. Se o descascamento chegar a uma
+# destas, o pedido veio sem conteúdo — típico de "consegue criar uma tarefa?",
+# que é pergunta, não ordem.
+VAZIOS = {
+    "mim", "me", "eu", "voce", "você", "isso", "isto", "aquilo", "algo",
+    "coisa", "ai", "aí", "la", "lá", "ela", "ele", "nada", "sim", "nao", "não",
+}
+
+
+def extrair_conteudo(texto: str) -> str:
+    """Descasca o pedido até sobrar o que deve virar tarefa.
+
+    Falado, o pedido vem embrulhado: "não, preciso que você crie uma nova
+    tarefa, marcando o médico dia 18". Só a última parte interessa.
+    """
+    limpo = texto.strip().rstrip(".!?")
+
+    anterior = None
+    while limpo != anterior:
+        anterior = limpo
+        limpo = PREFIXO.sub("", limpo, count=1).strip()
+        limpo = SUFIXO.sub("", limpo).strip()
+
+    return limpo.strip(" ,:;.")
+
+
+def anotar(texto: str) -> Resultado:
     """Cria uma tarefa a partir do que foi falado."""
-    limpo = re.sub(
-        r"^(jarvis[,\s]*)?(por favor[,\s]*)?"
-        r"(anota|anote|anotar|adiciona|adicione|adicionar|cria|crie|criar|"
-        r"lembra|lembre|lembrar)"
-        r"(\s+(uma\s+)?(tarefa|lembrete|nota|na lista|pra mim|para mim|que eu|de))*"
-        r"[:,\s]*",
-        "", texto.strip(), flags=re.IGNORECASE,
-    ).strip()
+    limpo = extrair_conteudo(texto)
 
-    if not limpo:
-        return "FALHA: não entendi o que anotar."
+    # Pergunta sobre a capacidade ("você consegue criar uma tarefa?") não é
+    # ordem: sem conteúdo real, perguntar é melhor do que salvar lixo.
+    if len(limpo) < 4 or _sem_acento(limpo) in VAZIOS:
+        return Resultado(False, "não entendi o que devo anotar. Pode repetir dizendo a tarefa?")
 
     try:
         with httpx.Client(timeout=8) as cli:
             r = cli.post(f"{PAINEL}/api/tarefas", json={"texto": limpo})
             r.raise_for_status()
     except httpx.HTTPError:
-        return "FALHA: não consegui salvar a tarefa."
+        return Resultado(False, "não consegui salvar a tarefa: o painel não está respondendo")
 
-    return f'Tarefa criada com sucesso: "{limpo}". Confirme isso ao usuário.'
+    return Resultado(True, f"Anotado: {limpo}.", acao=True)
 
 
-def noticias() -> str:
+def noticias() -> Resultado:
     d = _buscar("/api/noticias")
     if not d or not d.get("itens"):
-        return "FALHA: não há notícias disponíveis agora."
+        return Resultado(False, "não consegui consultar as notícias agora")
 
     manchetes = "; ".join(f"{n['titulo']} ({n['fonte']})" for n in d["itens"][:5])
-    return f"Manchetes mais recentes: {manchetes}."
+    return Resultado(True, f"Manchetes mais recentes: {manchetes}.")
 
 
-def sistema() -> str:
+def sistema() -> Resultado:
     d = _buscar("/api/sistema")
     if not d:
-        return "FALHA: sem telemetria da máquina."
+        return Resultado(False, "não consegui ler a telemetria da máquina")
 
     def pct(v):
         return "indisponível" if v is None else f"{round(v)} por cento"
 
-    return (
+    return Resultado(True, (
         f"Estado da máquina: processador em {pct(d['cpu'])}, "
         f"memória em {pct(d['ram'])}, placa de vídeo em {pct(d['gpu'])}, "
         f"memória de vídeo em {pct(d['vram'])}. "
         f"Modelo de linguagem: {d.get('modelo', 'desconhecido')}."
-    )
+    ))
 
 
-def data_hora() -> str:
+def data_hora() -> Resultado:
     agora = datetime.now()
-    return (
+    return Resultado(True, (
         f"Agora são {agora.hour} horas e {agora.minute} minutos, "
         f"{DIAS[agora.weekday()]}, {agora.day} de {MESES[agora.month - 1]} "
         f"de {agora.year}."
-    )
+    ))
 
 
 # -------------------------------------------------------------------- escolha
 
 
-def consultar(pergunta: str) -> str | None:
+def consultar(pergunta: str) -> Resultado | None:
     """Devolve o dado real pertinente à pergunta, ou None se nenhuma serve.
 
     A ordem importa: 'anotar' vem antes de 'tarefas' porque "anota uma tarefa"
     casaria com as duas, e a intenção ali é escrever, não ler.
     """
-    if _tem(pergunta, "anota", "anote", "adiciona", "adicione", "lembra de",
-            "lembre de", "cria uma tarefa", "criar tarefa", "poe na lista",
-            "coloca na lista"):
+    # Criar exige um verbo de criação; "tarefa" sozinho é leitura. Sem isto,
+    # "crie uma nova tarefa" caía na leitura da lista e o modelo, sem
+    # ferramenta nenhuma, inventava que havia criado.
+    criar = _tem(pergunta, "anota", "anote", "adiciona", "adicione", "cria",
+                 "crie", "registra", "registre", "marca", "marque", "agenda",
+                 "agende", "coloca", "coloque", "poe", "bota", "salva", "salve",
+                 "guarda", "guarde", "lembra", "lembre")
+    alvo = _tem(pergunta, "tarefa", "lembrete", "nota", "anotacao", "lista",
+                "compromisso", "item")
+
+    if criar and alvo:
         return anotar(pergunta)
 
     if _tem(pergunta, "clima", "tempo", "temperatura", "chuva", "chover",

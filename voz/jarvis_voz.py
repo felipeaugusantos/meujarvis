@@ -30,10 +30,18 @@ MODELO = "llama3.1:8b"
 
 PERSONA = (
     "Você é o Jarvis, assistente pessoal do Felipe, em Ribeirão Preto. "
+    "Você está conversando diretamente COM o Felipe: trate-o por você, nunca "
+    "fale dele na terceira pessoa nem diga que ele está ocupado. "
     "Responda sempre em português do Brasil. "
     "Suas respostas serão lidas em voz alta: escreva de forma natural e "
     "conversada, sem listas, sem marcadores, sem títulos e sem emojis. "
-    "Prefira frases curtas. Seja direto e evite enrolação."
+    "Prefira frases curtas. Seja direto e evite enrolação. "
+    # Sem isto o modelo confirma ações que nunca aconteceram — chegou a dizer
+    # que criara uma tarefa que nunca existiu.
+    "Você não executa ações por conta própria. Nunca afirme ter criado, "
+    "alterado, marcado ou apagado nada: quem faz isso é o sistema, e o "
+    "resultado sempre chega a você como 'Dado real do sistema'. Se não houver "
+    "esse dado, diga que não conseguiu fazer, nunca que fez."
 )
 
 # Fim de frase: pontuação seguida de espaço. Evita quebrar em "3.5" ou "Dr. Silva".
@@ -171,14 +179,36 @@ def main() -> int:
             # sistema logo antes da pergunta: fica perto o suficiente para o
             # modelo usar, sem virar parte do que o usuário disse.
             dado = consultar(entrada)
-            if dado:
+
+            # Falha de ferramenta não passa pelo modelo. Ele parafraseava o
+            # texto de erro — chegou a responder "FALHA em consultar as
+            # tarefas". O que precisa sair certo, sai do código.
+            if dado is not None and (not dado.ok or dado.acao):
+                if dado.ok:
+                    resposta = dado.texto
+                else:
+                    pedido = dado.texto.strip()
+                    # Não acrescenta ponto a texto que já termina em pontuação:
+                    # "repetir?" viraria "repetir?." e a voz lê a pausa dupla.
+                    fecho = "" if pedido.endswith((".", "!", "?")) else "."
+                    resposta = f"Desculpe, {pedido}{fecho}"
+                print(f"Jarvis> {resposta}\n")
+                voz.falar(resposta)
+
+                # A ação entra no histórico como fala do próprio Jarvis, para
+                # que ele saiba o que já fez se o assunto voltar.
+                historico.append({"role": "user", "content": entrada})
+                historico.append({"role": "assistant", "content": resposta})
+                continue
+
+            if dado is not None:
                 historico.append({
                     "role": "system",
                     "content": (
-                        f"Dado real do sistema, consultado agora: {dado}\n"
-                        "Responda usando exclusivamente este dado. Não invente "
-                        "números nem complemente com suposições. Se começar com "
-                        "FALHA, diga apenas que não conseguiu consultar."
+                        f"Consulta feita agora no sistema: {dado.texto}\n"
+                        "Responda usando exclusivamente esta informação. Não "
+                        "invente números nem datas, e não mencione que recebeu "
+                        "um dado — apenas responda naturalmente."
                     ),
                 })
 
